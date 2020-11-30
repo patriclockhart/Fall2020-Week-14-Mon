@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Eye Tracking Heatmap using Contour</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+
+        path{
+            stroke: none;
+            fill-opacity: .1;
+        }
+    </style>
+</head>
+<body>
+<svg id="svg_main">
+</svg>
+<script>
+    /************************************************************************************
+     // step 1. add svg element to html file -- set viewBox and width and height
+     // step 2. select svg element using d3.select
+     // step 3. load eye tracking data
+     // step 4. convert data into isoline coordinates using (d3.contourDensity)
+     // step 5. append the generated isolines to svg
+     *************************************************************************************/
+    let data_file ="../data/fixations.csv";
+    let bandwidth = 40; // bandwidth of the contours
+    // image dimensions
+    const width = 1683;
+    const height = 805;
+    // calculate 2% margin for the screen
+    let marginX = parseInt(5*width/100);
+    let marginY = parseInt(5*height/100);
+    // Step 2 add svg to the page
+    let svg = d3.select('#svg_main').attr('width',width).attr('height',height);
+    let figure = svg.append("g").attr('transform',`translate(${marginX},${marginY})`);
+    figure.append("image")
+        .attr("width",  width-2*marginX + "px")
+        .attr("height", height-2*marginY + "px")
+        .attr("xlink:href", "../data/stimuli.png");
+    //------------------------------------
+    //step 3
+    d3.csv(data_file,function(d){
+        // my time formatting method
+        //d3.timeParse("%Y-%m-%d %H:%M:%S.%L")( "2020-11-29 13:33:06.524")
+        return {
+            time : d3.timeParse("%Y-%m-%d %H:%M:%S.%L")(d.time),
+            duration : +d.duration,
+            x: +d.x,
+            y: +d.y,
+            pupil_diameter : +d.pupil_diameter
+        }
+    }).then(main);
+    function main(data){
+        let x_extent = d3.extent(data,d=>d.x);
+        let y_extent = d3.extent(data,d=>d.y);
+        let xScale = d3.scaleLinear()
+            .domain(x_extent).range([ 0, width-2*marginX ]);
+        let yScale = d3.scaleLinear()
+            .domain(y_extent).range([ height-2*marginY, 0]);
+        // compute the density data
+        let contourDensityData = d3.contourDensity()
+            .x(function(d) { return xScale(d.x); })
+            .y(function(d) { return yScale(d.y); })
+            .size([width-2*marginX, height-2*marginY])
+            .thresholds(100)
+            .bandwidth(bandwidth)
+            (data);
+        let colorScale = d3.scaleSequential()
+            .domain(
+                d3.extent(contourDensityData,d=>d.value)
+                )
+            .interpolator(d3.interpolateTurbo);
+
+        figure.selectAll("path")
+            .data(contourDensityData)
+            .enter().append("path")
+            .attr("d", d3.geoPath())
+            .attr("stroke", "black")
+            .attr("stroke-width", "1px")
+            .attr("stroke-linejoin", "round")
+            .attr('fill',function (d) {
+                return colorScale(d.value)});
+            }
+</script>
+</body>
+</html>
+
